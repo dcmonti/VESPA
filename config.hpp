@@ -47,6 +47,7 @@ static const char CALL_USAGE_MESSAGE[] =
   "      --poa <FILE>                     store POA in .sam format to this file (default: do not store)\n"
   "      --clusters <FILE>                store clusters to this file (default: do not store)\n"
   "      --clip-clusters <FILE>           store clipped-SFS clusters to this file (requires --clipped; default: do not store)\n"
+  "      --call-provenance <FILE>         store, per object gated on weight and per written record, its provenance (TSV; default: do not store)\n"
   "      --min-cluster-weight <INT>       minimum number of supporting superstrings for a call to be reported (default: 2)\n"
   "      --min-sv-length <INT>            minimum length of reported SVs (default: 25)\n"
   "      --require-sfs-overlap            require at least one original SFS to overlap the SV interval\n"
@@ -278,6 +279,12 @@ public:
   string poa = "";
   string clusters = "";
   string clip_clusters = "";
+  // --call-provenance FILE: TSV with, for every object the caller compares with
+  // --min-cluster-weight (SFS subcluster, clip cluster, rescued DEL/BND, chain junction), the weight
+  // used and the outcome (EVAL rows); the candidates dropped as germline during calling (DISCARD);
+  // and, for every written record, its origin and the objects it comes from (CALL rows). Diagnostic
+  // only: the calls are unchanged.
+  string call_provenance = "";
   string normal_contigs_bam = "";
   string bed_exclusion = "";
   

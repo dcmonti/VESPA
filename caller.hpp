@@ -153,6 +153,11 @@ private:
   // per-thread germline-filtered regions: {sv.chrom, sv.s, sv.s + abs(sv.l)}
   // populated in pcall(); merged into the per-chrom clip vartrees in run()
   vector<vector<std::tuple<std::string, int, int>>> _p_germline_regions;
+  // --call-provenance: EVAL/DISCARD rows per thread, then serial, then CALL rows
+  vector<vector<string>> _p_prov;
+  vector<string> _prov;
+  void prov_calls(const vector<SV> &recs);
+  void write_provenance();
 
   // per-thread handles for normal contigs BAM (optional germline filter)
   samFile **_p_normal_bam = nullptr;

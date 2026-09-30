@@ -162,6 +162,20 @@ static string bnd_alt(const Clip &c, bool is_left, const string &refbase) {
   return is_left ? m + refbase : refbase + m;
 }
 
+// --call-provenance: a clip cluster as its two points, the clip position p (1-based) with its
+// side, and the partner boundary adjacent to the junction (same formula as bnd_alt, 1-based).
+static string clip_src(const Clip &c, bool is_left) {
+  string s = "C:" + c.chrom + ":" + to_string(c.p + 1) + ":" + (is_left ? "L" : "R");
+  if (c.sa_has_info && c.sa_query_len > 0) {
+    const bool same_strand = (c.primary_reverse == c.sa_reverse);
+    const uint mate = is_left
+                          ? (same_strand ? c.sa_pos + c.sa_ref_len - 1 : c.sa_pos)
+                          : (same_strand ? c.sa_pos : c.sa_pos + c.sa_ref_len - 1);
+    s += ">" + c.sa_chrom + ":" + to_string(mate);
+  }
+  return s;
+}
+
 // VCF POS (1-based) of a clip's breakend: the aligned base next to the clip.
 // c.p is htslib's 0-based coordinate, which means two different things on the
 // two sides: the first aligned base for a LEFT clip (core.pos), one past the last
@@ -920,6 +934,7 @@ void Clipper::call(int threads,
     store_vote_groups();
   }
   _p_svs.resize(threads);
+  _p_eval.assign(threads, {});
   // Aggregate clip-cluster statistics (info-level summary at the end).
   uint min_cw = Configuration::getInstance()->min_cluster_weight;
   size_t l_above_thr = 0, r_above_thr = 0; // clip clusters with w >= threshold
@@ -1149,6 +1164,7 @@ void Clipper::call(int threads,
       for (const auto &m : g.members) {
         const Clip &c = m.first ? lclips[m.second] : rclips[m.second];
         append_names(pc.names, c.names);
+        pc.prov += "|" + clip_src(c, m.first);
       }
       prov_dels.push_back(std::move(pc));
     }
@@ -1182,6 +1198,10 @@ void Clipper::call(int threads,
                         max(lclip_pool[i],
                             max(linv_pool[i],
                                 max(ldel_pool[i], lbnd_pool[i]))));
+       if (!Configuration::getInstance()->call_provenance.empty())
+         _p_eval[t].push_back("EVAL\tclip\t" + clip_src(lc, true) + "\t" +
+                              to_string(lc.w) + "\t" + to_string(eff_w) + "\t" +
+                              (eff_w >= Configuration::getInstance()->min_cluster_weight ? "1" : "0"));
        uint min_sv_len = Configuration::getInstance()->min_sv_length;
        // sa_pos is 1-based (SAM spec); lc.p is 0-based (htslib) → convert
        uint sa_pos0 = lc.sa_pos > 0 ? lc.sa_pos - 1 : 0;
@@ -1219,6 +1239,7 @@ void Clipper::call(int threads,
            bc.ins_seq = lc.ins_seq;
            bc.names = lc.names;
            bc.sa_names = lc.sa_names;
+           bc.prov = "|" + clip_src(lc, true);
 #pragma omp critical(prov_bnds)
            prov_bnds.push_back(bc);
          }
@@ -1246,6 +1267,7 @@ void Clipper::call(int threads,
                                  chromosome_seqs[chrom] + lc.p);
                sv.add_reads(lc.names);
                sv.add_sa_reads(lc.sa_names);
+               sv.prov = "clip|" + clip_src(lc, true) + "|w=" + to_string(eff_w);
                _p_svs[t].push_back(sv);
            }
        } else if (lc.primary_reverse != lc.sa_reverse) {
@@ -1264,6 +1286,7 @@ void Clipper::call(int threads,
                SV sv = SV("INV", chrom, s, refbase, "<INV>", inv_w, 0, 0, 0, true, l);
                sv.add_reads(lc.names);
                sv.add_sa_reads(lc.sa_names);
+               sv.prov = "clip|" + clip_src(lc, true) + "|w=" + to_string(eff_w);
                _p_svs[t].push_back(sv);
            }
        } else {
@@ -1284,6 +1307,7 @@ void Clipper::call(int threads,
                    SV sv = SV("DUP", chrom, s, refbase, "<DUP>", eff_w, 0, 0, 0, true, jump);
                    sv.add_reads(lc.names);
                    sv.add_sa_reads(lc.sa_names);
+                   sv.prov = "clip|" + clip_src(lc, true) + "|w=" + to_string(eff_w);
                    _p_svs[t].push_back(sv);
                }
            } else {
@@ -1334,6 +1358,7 @@ void Clipper::call(int threads,
                                          chromosome_seqs[chrom] + j);
                        sv.add_reads(lc.names);
                        sv.add_sa_reads(lc.sa_names);
+                       sv.prov = "clip|" + clip_src(lc, true) + "|w=" + to_string(eff_w);
                        _p_svs[t].push_back(sv);
                    }
                } else if (dQ > dR + min_sv_len) {
@@ -1349,6 +1374,7 @@ void Clipper::call(int threads,
                        sv.ref_gap = (int)dR;
                        sv.add_reads(lc.names);
                        sv.add_sa_reads(lc.sa_names);
+                       sv.prov = "clip|" + clip_src(lc, true) + "|w=" + to_string(eff_w);
                        _p_svs[t].push_back(sv);
                    }
                }
@@ -1390,6 +1416,7 @@ void Clipper::call(int threads,
         append_names(pair_names, rc.names);
         SV sv = SV("INS", chrom, s, refbase, "<INS>", w, 0, 0, 0, true, l);
         sv.add_reads(pair_names);
+        sv.prov = "fallback";
         _p_svs[t].push_back(sv);
       }
     }
@@ -1413,6 +1440,10 @@ void Clipper::call(int threads,
                         max(rclip_pool[i],
                             max(rinv_pool[i],
                                 max(rdel_pool[i], rbnd_pool[i]))));
+       if (!Configuration::getInstance()->call_provenance.empty())
+         _p_eval[t].push_back("EVAL\tclip\t" + clip_src(rc, false) + "\t" +
+                              to_string(rc.w) + "\t" + to_string(eff_w) + "\t" +
+                              (eff_w >= Configuration::getInstance()->min_cluster_weight ? "1" : "0"));
        uint min_sv_len = Configuration::getInstance()->min_sv_length;
        // sa_pos is 1-based (SAM spec); rc.p is 0-based (htslib) → convert
        uint sa_pos0 = rc.sa_pos > 0 ? rc.sa_pos - 1 : 0;
@@ -1450,6 +1481,7 @@ void Clipper::call(int threads,
            bc.ins_seq = rc.ins_seq;
            bc.names = rc.names;
            bc.sa_names = rc.sa_names;
+           bc.prov = "|" + clip_src(rc, false);
 #pragma omp critical(prov_bnds)
            prov_bnds.push_back(bc);
          }
@@ -1475,6 +1507,7 @@ void Clipper::call(int threads,
                                  chromosome_seqs[chrom] + rc.p);
                sv.add_reads(rc.names);
                sv.add_sa_reads(rc.sa_names);
+               sv.prov = "clip|" + clip_src(rc, false) + "|w=" + to_string(eff_w);
                _p_svs[t].push_back(sv);
            }
        } else if (rc.primary_reverse != rc.sa_reverse) {
@@ -1490,6 +1523,7 @@ void Clipper::call(int threads,
                SV sv = SV("INV", chrom, s, refbase, "<INV>", inv_w, 0, 0, 0, true, l);
                sv.add_reads(rc.names);
                sv.add_sa_reads(rc.sa_names);
+               sv.prov = "clip|" + clip_src(rc, false) + "|w=" + to_string(eff_w);
                _p_svs[t].push_back(sv);
            }
        } else {
@@ -1511,6 +1545,7 @@ void Clipper::call(int threads,
                    SV sv = SV("DUP", chrom, s, refbase, "<DUP>", eff_w, 0, 0, 0, true, jump);
                    sv.add_reads(rc.names);
                    sv.add_sa_reads(rc.sa_names);
+                   sv.prov = "clip|" + clip_src(rc, false) + "|w=" + to_string(eff_w);
                    _p_svs[t].push_back(sv);
                }
            } else {
@@ -1538,6 +1573,7 @@ void Clipper::call(int threads,
                                          chromosome_seqs[chrom] + s);
                        sv.add_reads(rc.names);
                        sv.add_sa_reads(rc.sa_names);
+                       sv.prov = "clip|" + clip_src(rc, false) + "|w=" + to_string(eff_w);
                        _p_svs[t].push_back(sv);
                    }
                } else if (dQ > dR + min_sv_len) {
@@ -1550,6 +1586,7 @@ void Clipper::call(int threads,
                        sv.ref_gap = (int)dR;
                        sv.add_reads(rc.names);
                        sv.add_sa_reads(rc.sa_names);
+                       sv.prov = "clip|" + clip_src(rc, false) + "|w=" + to_string(eff_w);
                        _p_svs[t].push_back(sv);
                    }
                }
@@ -1591,6 +1628,7 @@ void Clipper::call(int threads,
         append_names(pair_names, rc.names);
         SV sv = SV("DEL", chrom, s, refbase, "<DEL>", w, 0, 0, 0, true, l);
         sv.add_reads(pair_names);
+        sv.prov = "fallback";
         _p_svs[t].push_back(sv);
       }
     }

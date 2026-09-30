@@ -166,6 +166,7 @@ struct ClipBndCand {
   string ins_seq;
   vector<string> names;
   vector<string> sa_names; // already counted: excluded from the rescue tally
+  string prov; // --call-provenance: the clip cluster
 };
 
 // A deletion whose pooled clip evidence is below min_cluster_weight but short
@@ -178,6 +179,7 @@ struct ClipDelCand {
   uint len;
   uint clip_w;          // pooled clip-side split-read support (< min_cluster_weight)
   vector<string> names; // clip read names, carried onto the emitted SV
+  string prov;          // --call-provenance: the pooled clip clusters
 };
 
 class Clipper {
@@ -214,6 +216,7 @@ private:
 
 public:
   vector<vector<SV>> _p_svs;
+  vector<vector<string>> _p_eval; // --call-provenance EVAL rows, per thread
   vector<ClipDelCand> prov_dels; // sub-threshold DELs for Mode B rescue
   vector<ClipBndCand> prov_bnds; // sub-threshold BNDs, rescued on the BAM
 

@@ -119,6 +119,8 @@ public:
   // record that is written. Empty only for a breakend whose partner locus is not
   // in the reference.
   string mate_id;
+  // --call-provenance: "origin|source|source...", set where the record is created.
+  string prov;
   // This BND was not observed: pair_bnd_mates() built it as the other side of a
   // junction seen from one breakend only (INFO flag MATEINFERRED).
   bool mate_inferred = false;

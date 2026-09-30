@@ -335,6 +335,7 @@ void Caller::run() {
   _p_svs.resize(config->threads);
   _p_alignments.resize(config->threads);
   _p_germline_regions.resize(config->threads);
+  _p_prov.assign(config->threads, {});
   pcall(C.clusters);
 
   // NOTE: the normal-contigs BAM is kept open here; it is also used by the
@@ -420,6 +421,8 @@ void Caller::run() {
     vector<SV> clipped_svs;
     Clipper clipper(C.clips);
     clipper.call(config->threads, vartrees, calltrees);
+    for (const auto &rows : clipper._p_eval)
+      _prov.insert(_prov.end(), rows.begin(), rows.end());
     int s = 0;
     for (int i = 0; i < config->threads; i++) {
       s += clipper._p_svs[i].size();
@@ -440,6 +443,11 @@ void Caller::run() {
         for (const ClipDelCand &pc : clipper.prov_dels) {
           uint n_through =
               count_through_del_reads(bam, idx, hdr, pc.chrom, pc.s, pc.len);
+          if (!config->call_provenance.empty())
+            _prov.push_back("EVAL\tdel_through\t" + pc.prov.substr(1) + "\t" +
+                            to_string(pc.clip_w) + "\t" +
+                            to_string(pc.clip_w + n_through) + "\t" +
+                            (pc.clip_w + n_through >= config->min_cluster_weight ? "1" : "0"));
           if (pc.clip_w + n_through < config->min_cluster_weight)
             continue;
           // Germline veto. A deletion also spanned by through-reads in the
@@ -460,6 +468,7 @@ void Caller::run() {
           SV sv("DEL", pc.chrom, pc.s, refbase, "<DEL>", pc.clip_w + n_through, 0,
                 0, 0, true, pc.len);
           sv.add_reads(pc.names);
+          sv.prov = "del_through" + pc.prov + "|w=" + to_string(pc.clip_w + n_through);
           clipped_svs.push_back(sv);
           ++rescued;
           spdlog::debug("[CLIP_MODEB] {}:{} len={} clip_w={} through={} -> w={}",
@@ -501,6 +510,11 @@ void Caller::run() {
           uint n_sup = count_partner_sa_reads(bam, idx, hdr, bc.sa_chrom,
                                               bc.sa_pos, bc.sa_ref_len,
                                               bc.chrom, bc.p, excl);
+          if (!config->call_provenance.empty())
+            _prov.push_back("EVAL\tbnd_rescue\t" + bc.prov.substr(1) + "\t" +
+                            to_string(bc.clip_w) + "\t" +
+                            to_string(bc.clip_w + n_sup) + "\t" +
+                            (bc.clip_w + n_sup >= config->min_cluster_weight ? "1" : "0"));
           if (bc.clip_w + n_sup < config->min_cluster_weight)
             continue;
           // Germline veto, as in Mode B: the same junction supported in the
@@ -528,6 +542,7 @@ void Caller::run() {
           }
           sv.add_reads(bc.names);
           sv.add_sa_reads(bc.sa_names);
+          sv.prov = "bnd_rescue" + bc.prov + "|w=" + to_string(bc.clip_w + n_sup);
           clipped_svs.push_back(sv);
           ++rescued;
           spdlog::debug("[CLIP_BNDRESCUE] {}:{} -> {}:{} clip_w={} supp={} -> w={}",
@@ -616,6 +631,19 @@ void Caller::run() {
       for (Agg &g : aggs) {
         sort(g.names.begin(), g.names.end());
         g.names.erase(unique(g.names.begin(), g.names.end()), g.names.end());
+        string jsrc;
+        if (!config->call_provenance.empty()) {
+          vector<uint> sa = g.pas, sb = g.pbs;
+          sort(sa.begin(), sa.end());
+          sort(sb.begin(), sb.end());
+          jsrc = "J:" + g.ca + ":" + to_string(sa[sa.size() / 2]) + ":" +
+                 (g.a_left ? "L" : "R") + ">" + g.cb + ":" +
+                 to_string(sb[sb.size() / 2]);
+          _prov.push_back("EVAL\tchain_junction\t" + jsrc + "\t" +
+                          to_string(g.names.size()) + "\t" +
+                          to_string(g.names.size()) + "\t" +
+                          (g.names.size() >= config->min_cluster_weight ? "1" : "0"));
+        }
         if (g.names.size() < config->min_cluster_weight) {
           ++low;
           continue;
@@ -653,6 +681,7 @@ void Caller::run() {
               true, 0);
         sv.add_reads(g.names);
         sv.add_sa_reads(g.names);
+        sv.prov = "chain|" + jsrc + "|w=" + to_string(g.names.size());
         chain_svs.push_back(sv);
         ++emitted;
         spdlog::debug("[CLIP_CHAIN] {}:{} {} w={}", g.ca, pa, alt,
@@ -706,6 +735,8 @@ void Caller::run() {
         // the same way — checked via the contigs' SA, not CIGAR I/D ops.
         // Serial loop → t=0.
         if (_p_normal_bam && is_germline_breakend(sv, 0)) {
+          if (!config->call_provenance.empty())
+            _prov.push_back("DISCARD\tgermline\t" + sv.idx + "\t" + sv.prov);
           if (sv.type == "BND")
             germline_bnds.push_back(sv);
           continue;
@@ -852,6 +883,9 @@ void Caller::run() {
           b.reads = sv.reads;
           a.sa_reads = sv.sa_reads;
           b.sa_reads = sv.sa_reads;
+          a.prov = b.prov = "templ|" + sv.prov + "|F:" + f.chrom + ":" +
+                            to_string(f.pos) + "-" + to_string(far) +
+                            "|DEL=" + sv.idx;
           split_svs.push_back(a);
           split_svs.push_back(b);
           drop[i] = true;
@@ -908,9 +942,11 @@ void Caller::run() {
     collect_call_stats(kept);
     apply_gates(kept);
     pair_bnd_mates(kept);
+    prov_calls(kept);
     for (const SV &sv : kept)
       cout << sv << endl;
   }
+  write_provenance();
 
   if (_p_normal_bam) {
     for (int i = 0; i < config->threads; i++) {
@@ -1139,6 +1175,7 @@ void Caller::pair_bnd_mates(vector<SV> &records) {
     m.ins_len = x.ins_len;
     m.hom_len = x.hom_len;
     m.mate_inferred = true;
+    m.prov = "mate|" + x.prov + "|OBS=" + x.idx;
     m.mate_id = x.idx;
     x.mate_id = m.idx;
     built.push_back(std::move(m));
@@ -1161,9 +1198,45 @@ void Caller::write_vcf() {
       out.push_back(sv);
   svs.swap(out);
   pair_bnd_mates(svs);
+  prov_calls(svs);
   print_vcf_header();
   for (const SV &sv : svs)
     cout << sv << endl;
+}
+
+void Caller::prov_calls(const vector<SV> &recs) {
+  if (config->call_provenance.empty())
+    return;
+  for (const SV &sv : recs)
+    _prov.push_back("CALL\t" + sv.idx + "\t" + sv.chrom + "\t" +
+                    to_string(sv.s) + "\t" + to_string(sv.e) + "\t" + sv.type +
+                    "\t" + to_string(sv.l) + "\t" + sv.filter + "\t" + sv.prov);
+}
+
+// --call-provenance: EVAL rows (every object compared with
+// --min-cluster-weight, sorted, as threads fill them in any order), DISCARD
+// rows (candidates dropped as germline during calling) and CALL rows (every
+// written record, in output order). Leaves the calls untouched.
+void Caller::write_provenance() {
+  if (config->call_provenance.empty())
+    return;
+  vector<string> ev;
+  for (const auto &rows : _p_prov)
+    ev.insert(ev.end(), rows.begin(), rows.end());
+  vector<string> calls;
+  for (const string &r : _prov)
+    (r.rfind("CALL\t", 0) == 0 ? calls : ev).push_back(r);
+  sort(ev.begin(), ev.end());
+  ofstream o(config->call_provenance);
+  o << "#EVAL\tkind\tsource\tw_own\tw_used\tpass\n"
+       "#DISCARD\treason\trecord\tprov\n"
+       "#CALL\trecord_id\tchrom\tpos\tend\tsvtype\tsvlen\tfilter\tprov\n";
+  for (const string &r : ev)
+    o << r << "\n";
+  for (const string &r : calls)
+    o << r << "\n";
+  spdlog::info("[PROVENANCE] {} EVAL/DISCARD and {} CALL rows written to {}",
+               ev.size(), calls.size(), config->call_provenance);
 }
 
 void Caller::write_sam() {
@@ -1881,6 +1954,9 @@ void Caller::merge_fragmented_dels(vector<SV> &recs) {
     // and del_kept says how many of those bases the alignments did NOT delete.
     sv.del_parts = (int)(last - i + 1);
     sv.del_kept = (int)span - deleted;
+    sv.prov = "merge_del";
+    for (size_t k = i; k <= last; ++k)
+      sv.prov += "+" + recs[k].prov;
     spdlog::info("[MERGE_DEL_XC] {} + {} more -> {}:{}-{} span={} deleted={} "
                  "kept={} reads={}",
                  recs[i].idx, last - i, sv.chrom, sv.s, sv.e, span, deleted,
@@ -2449,6 +2525,11 @@ void Caller::pcall(const vector<Cluster> &clusters) {
 
     // Calling from one or two clusters
     for (const Cluster &cl : subclusters) {
+      const string psrc = "S:" + chrom + ":" + to_string(cl.s) + "-" + to_string(cl.e);
+      if (!config->call_provenance.empty())
+        _p_prov[t].push_back("EVAL\tsfs_subcluster\t" + psrc + "\t" +
+                             to_string(cl.size()) + "\t" + to_string(cl.size()) +
+                             "\t" + (cl.size() >= config->min_cluster_weight ? "1" : "0"));
       if (cl.size() < config->min_cluster_weight) {
         spdlog::debug(
             "[CALLER_FILTER][MIN_CLUSTER_WEIGHT_POST_SPLIT] chrom={} interval={} subcluster_reads={} threshold={}",
@@ -2546,6 +2627,7 @@ void Caller::pcall(const vector<Cluster> &clusters) {
                            consensus.substr(cpos, l),
                        allele_w, cl.cov, nv, score, false, l, cigar_str);
             sv.add_reads(allele_names);
+            sv.prov = "poa|" + psrc + "|w=" + to_string(allele_w);
             _svs.push_back(sv);
             nv++;
           }
@@ -2591,6 +2673,7 @@ void Caller::pcall(const vector<Cluster> &clusters) {
                         allele_w);
         }
         sv.add_reads(allele_names);
+        sv.prov = "poa|" + psrc + "|w=" + to_string(allele_w);
         _svs.push_back(sv);
         nv++;
         d = last + 1;
@@ -2626,6 +2709,8 @@ void Caller::pcall(const vector<Cluster> &clusters) {
               sv.chrom, sv.s, sv.e, sv.type, sv.l);
 #pragma omp atomic
           ++n_filt_germline;
+          if (!config->call_provenance.empty())
+            _p_prov[t].push_back("DISCARD\tgermline\t" + sv.idx + "\t" + sv.prov);
           // Record the germline region so that clip-based calls near this
           // event are also suppressed by filter_tooclose_clips().
           _p_germline_regions[t].push_back(
