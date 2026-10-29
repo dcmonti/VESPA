@@ -1297,9 +1297,17 @@ void Clipper::call(int threads,
            long long diff = (long long)lc.p - (long long)(sa_pos0 + lc.sa_ref_len);
 
            if (diff < 0) {
-               // DUP — duplicated interval spans the primary/SA overlap. Geometry
-               // differs from DEL/INS; left unchanged (its own coordinate handling).
-               uint s = min(lc.p, sa_pos0);
+               // DUP — the read runs along the SA segment up to its end, then jumps
+               // back to lc.p, so the duplicated interval is [lc.p, sa_pos0 +
+               // sa_ref_len). The start is lc.p, NOT the SA start: sa_pos0 only says
+               // how much upstream flank the aligner put in the SA segment, and
+               // min(lc.p, sa_pos0) shifted POS upstream by sa_ref_len - jump
+               // (652 bp on a 7.2 kb COLO829 DUP, past the matching tolerance).
+               // That misplaced POS also blinded is_germline_breakend, which looks
+               // for normal split reads around POS, and kept this call from
+               // collapsing onto the right-clip copy, whose start (sa_pos0 there)
+               // is the same breakend -- as dup_anchors in the pooling assumes.
+               uint s = lc.p;
                string refbase(chromosome_seqs[chrom] + s, 1);
                long long jump = -diff;
                if (jump >= min_sv_len && eff_w >= Configuration::getInstance()->min_cluster_weight) {

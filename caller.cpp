@@ -108,8 +108,9 @@ Caller::collect_sa_fragments(samFile *bam, hts_idx_t *idx, bam_hdr_t *hdr,
   if (tid < 0)
     return out;
   const int tol = PARTNER_SA_TOL / 5;
-  // (contig, bucketed pos, strand) -> distinct read names, and the modal block
-  // key -> (nomi read distinti, (lunghezza blocco, posizione REALE))
+  // (contig, bucketed pos, strand relative to the record) -> distinct read
+  // names, and the modal block key -> (nomi read distinti, (lunghezza blocco,
+  // posizione REALE))
   map<tuple<string, uint, bool>, pair<set<string>, pair<uint, uint>>> groups;
   bam1_t *aln = bam_init1();
   const uint bp[2] = {s, e};
@@ -155,7 +156,15 @@ Caller::collect_sa_fragments(samFile *bam, hts_idx_t *idx, bam_hdr_t *hdr,
           // Il bucket serve SOLO a raggruppare: la posizione riportata deve
           // essere quella reale, altrimenti il mate esce spostato di meta'
           // bucket e la geometria emessa non e' quella dei read.
-          auto key = make_tuple(rname, (uint)(pos / tol) * (uint)tol, rev);
+          //
+          // Strand RELATIVE to this record, not the SA's absolute one: the same
+          // fragment carried by reads of both orientations reports opposite SA
+          // strands, and keying on the absolute one split it into two groups
+          // that tripped the abstention (truthset_19/20 with pbmm2: 2+2 reads).
+          // It is also what the consumer means: f.reverse = inverted with
+          // respect to the host, same_strand = !f.reverse.
+          const bool flip = rev != ((aln->core.flag & BAM_FREVERSE) != 0);
+          auto key = make_tuple(rname, (uint)(pos / tol) * (uint)tol, flip);
           auto &g = groups[key];
           g.first.insert(qname);
           if (g.second.first == 0) {
@@ -814,10 +823,16 @@ void Caller::run() {
             // comparable or larger block is a different rearrangement.
             if (f.block == 0 || f.block * TEMPL_MAX_FRAG_RATIO >= dlen)
               continue;
+            // An owning breakend's mate sits at EITHER end of the fragment
+            // (bnd_alt picks sa_pos or sa_last by side and strand), so test
+            // the whole segment, not just its start: with a block longer than
+            // the tolerance, a mate on the far end went unrecognised.
+            const long f_far = (long)f.pos + (long)f.block - 1;
             bool has_owner = false;
             for (const auto &o : owned)
               if (o.first == f.chrom &&
-                  labs(o.second - (long)f.pos) <= PARTNER_SA_TOL)
+                  o.second >= (long)f.pos - PARTNER_SA_TOL &&
+                  o.second <= f_far + PARTNER_SA_TOL)
                 has_owner = true;
             if (has_owner)
               continue;
@@ -846,8 +861,14 @@ void Caller::run() {
                           sv.chrom, sv.s, f.chrom, f.pos);
             continue;
           }
-          // The fragment spans [pos, pos+block). Its far end joins the deletion
-          // START and its near end the deletion END.
+          // The fragment spans [pos, pos+block). Which end joins which side
+          // depends on its orientation. Inverted (the COLO829 case), the read
+          // walks it backwards: the deletion START joins its FAR end and the
+          // deletion END its near end (pos). Same strand, it is walked forwards:
+          // the START joins pos and the END the far end. Pinning far/pos
+          // regardless of orientation put both mates of a same-strand fragment
+          // at the wrong end, off by the block length -- the bnd_alt() mate rule
+          // (right clip: same_strand ? sa_pos : sa_last) says the same.
           //
           // The two brackets are MIRRORED, not equal. bnd_alt() in clipper.cpp
           // is the reference: a RIGHT clip (primary to the left of the
@@ -867,14 +888,16 @@ void Caller::run() {
           // the deletion-end breakend is the first base after the span, sv.e + 1.
           // The fragment is the SA segment [f.pos, f.pos + f.block - 1].
           const long far = (long)f.pos + (long)f.block - 1;
+          const long mate_s = same_strand ? (long)f.pos : far;
+          const long mate_e = same_strand ? far : (long)f.pos;
           const uint pos_e = (uint)sv.e + 1;
           string rb_s(chromosome_seqs[sv.chrom] + sv.s - 1, 1);
           string rb_e(chromosome_seqs[sv.chrom] + pos_e - 1, 1);
           SV a("BND", sv.chrom, sv.s, rb_s,
-               rb_s + brk_s + f.chrom + ":" + to_string(far) + brk_s, sv.w, 0,
-               0, 0, true, 0);
+               rb_s + brk_s + f.chrom + ":" + to_string(mate_s) + brk_s, sv.w,
+               0, 0, 0, true, 0);
           SV b("BND", sv.chrom, pos_e, rb_e,
-               brk_e + f.chrom + ":" + to_string((long)f.pos) + brk_e + rb_e,
+               brk_e + f.chrom + ":" + to_string(mate_e) + brk_e + rb_e,
                sv.w, 0, 0, 0, true, 0);
           // sv.reads is the already-joined string, not the vector add_reads()
           // builds: copy it across so the two breakends carry the deletion's

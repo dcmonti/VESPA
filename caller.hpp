@@ -133,11 +133,11 @@ private:
     uint pos;
     uint block;
     uint nreads;
-    bool reverse;
+    bool reverse; // inverted with respect to the host record
   };
   // Cross-contig SA groups seen within `pad` of either breakpoint of the
-  // deletion chrom:[s,e]. Grouped by (contig, pos within tol, strand) and
-  // counted by distinct read name.
+  // deletion chrom:[s,e]. Grouped by (contig, pos within tol, strand relative
+  // to the host record) and counted by distinct read name.
   vector<SAFragment> collect_sa_fragments(samFile *bam, hts_idx_t *idx,
                                           bam_hdr_t *hdr, const string &chrom,
                                           uint s, uint e);

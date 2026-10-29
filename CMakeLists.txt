@@ -115,7 +115,7 @@ endif ()
 message(STATUS "ksw2 will be built from source")
 ExternalProject_Add(ksw2
     GIT_REPOSITORY https://github.com/lh3/ksw2.git
-    GIT_TAG ""
+    GIT_TAG 289609bd9e5381a13b16239d0a7703f1ff03f9ca # master 2023-06-27 (no release tags upstream)
     BUILD_IN_SOURCE 1
     UPDATE_COMMAND ""
     CONFIGURE_COMMAND ""
