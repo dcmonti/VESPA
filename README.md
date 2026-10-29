@@ -1,182 +1,136 @@
-[![Anaconda-Server Badge](https://anaconda.org/bioconda/svdss/badges/version.svg)](https://anaconda.org/bioconda/svdss)
+# VESPA: Variant Extraction from somatic-SPecific strings and draft Assemblies
 
-# SVDSS: Structural Variant Discovery from Sample-specific Strings
-
-#### Note: SVDSS is designed to work with accurate long reads (e.g., PacBio HiFi). It can theoretically work with other technologies (e.g., ONT) but results may be inaccurate.
+#### Note: VESPA needs a tumor and its matched normal, both sequenced with PacBio HiFi. It has not been tested on other technologies (e.g., ONT).
 
 ---
 
-SVDSS is a method for structural variations discovery from accurate long reads (e.g PacBio HiFi), based on the notion of sample-specific strings (SFS, or simply _specific strings_).
+VESPA finds the sequence of the tumor reads that is absent from the reference and from the germline genome of the patient, and calls somatic SVs from it.
+It is based on the notion of sample-specific strings (SFS, or simply _specific strings_): the shortest substrings of a read that do not occur in an index.
+Here the index holds the reference and the germline sequence of the patient: a draft assembly of the normal reads (unitigs) and the normal reads the assembly misses.
+The SFS of the tumor reads against this index are then specific to the tumor, and they mark candidate somatic SVs.
 
-SFS are the shortest substrings that are unique to one sample, called target, w.r.t a genome reference. Here our method utilizes SFS for coarse-grained identification (anchoring) of potential SV sites and performs local partial-order-assembly (POA) of clusters of SFS from such sites to produce accurate SV predictions. We refer to [our manuscript on SFS](https://doi.org/10.1093/bioadv/vbab005) for more details regarding the concept of SFS.
+The steps are:
+1. error correction of the tumor and normal reads with a version of hifiasm that preserves somatic variants ([hifiasm v1.0.0-somatic](https://github.com/ldenti/hifiasm/tree/v1.0.0-somatic));
+2. index of the reference, the normal unitigs and the normal reads they miss; SFS of the tumor reads against it;
+3. calling from the SFS placed on the tumor alignments (clustering and partial-order assembly) and from the SFS at clipped alignments (breakpoint junctions);
+4. germline filtering with the normal reads.
+
+VESPA extends [SVDSS](https://github.com/Parsoa/SVDSS) (Denti, Khorsand et al., [Nature Methods 2023](https://doi.org/10.1038/s41592-022-01674-1)), which calls germline SVs from SFS.
 
 ## Download and Installation
 
-You can get SVDSS in three different ways:
-* [compiling it](#compilation-from-source) (**use this method if you want SVDSS to be fully optimized**)
+You can get VESPA in two ways:
 * [downloading a static binary](#static-binary)
-* [installing from conda](#install-from-conda)
+* [compiling it](#compilation-from-source)
+
+#### Static Binary
+A static binary for x86_64 Linux, `vespa_linux_x86-64`, is attached to each [release](https://github.com/dcmonti/VESPA/releases/latest).
+It has no runtime dependency.
 
 #### Compilation from Source
-To compile and use SVDSS, you need:
+To compile VESPA, you need:
 * a C++14-compliant compiler (GCC 8.2 or newer)
 * make, automake, autoconf
 * cmake (>=3.14)
 * git
 * some other development libraries: zlib, bz2, lzma
-* samtools and bcftools (>=1.9)
-* [kanpig](https://github.com/ACEnglish/kanpig) (optional, just for genotyping)
 
 To install these dependencies:
 ```bash
-# On a deb-based system (tested on ubuntu 20.04 and debian 11):
-sudo apt install build-essential autoconf cmake git zlib1g-dev libbz2-dev liblzma-dev samtools bcftools
-# On a rpm-based system (tested on fedora 35):
-sudo dnf install gcc gcc-c++ make automake autoconf cmake git libstdc++-static zlib-devel bzip2-devel xz-devel samtools bcftools
+# On a deb-based system:
+sudo apt install build-essential autoconf cmake git zlib1g-dev libbz2-dev liblzma-dev
+# On a rpm-based system:
+sudo dnf install gcc gcc-c++ make automake autoconf cmake git libstdc++-static zlib-devel bzip2-devel xz-devel
 ```
 
-The following libraries are needed to build and run SVDSS but they are automatically downloaded and compiled while compiling SVDSS:
+The following libraries are downloaded and compiled while compiling VESPA, each at a fixed commit:
 * [htslib](https://github.com/samtools/htslib) built with [libdeflate](https://github.com/ebiggers/libdeflate) for BAM processing.
-* [ksw2](https://github.com/lh3/ksw2) for FASTA and FASTQ processing.
+* [ksw2](https://github.com/lh3/ksw2) for alignment.
 * [ropebwt3](https://github.com/lh3/ropebwt3) for FMD index creation and querying.
 * [abPOA](https://github.com/yangao07/abPOA) for POA computation.
-* [parasail](https://github.com/jeffdaily/parasail) for local alignment of POA consensus.
 * [rapidfuzz](https://github.com/maxbachmann/rapidfuzz-cpp) for string similarity computation.
 * [interval-tree](https://github.com/5cript/interval-tree) for variant overlap detection and clustering.
 * [spdlog](https://github.com/gabime/spdlog) for logging.
 
-To download and install SVDSS (should take ~10 minutes):
+To download and compile VESPA:
 ```bash
-git clone https://github.com/Parsoa/SVDSS.git
-cd SVDSS 
+git clone https://github.com/dcmonti/VESPA.git
+cd VESPA
 mkdir build ; cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
 make
 ```
-This will create the `SVDSS` binary in the root of the repo.
-
-#### Static Binary
-For user convenience, we also provide a static binary for x86_64 linux systems (see [Releases](https://github.com/Parsoa/SVDSS/releases/latest)) - use at your own risk. If it does not work, please let us know.
-
-#### Install from Conda
-SVDSS is available on bioconda:
-```bash
-conda create -n svdss -c conda-forge -c bioconda svdss
-```
-This will create the environment `svdss` that includes `SVDSS` and its runtime dependencies (i.e., `samtools`, `bcftools`, and `kanpig`).
+This creates the `vespa` binary in the root of the repo.
+`static/build-static.sh` builds the static binary instead.
 
 ## Usage Guide
-Please refer to or use [run_svdss](run_svdss).
 
-```
-Usage: run_svdss <reference.fa> <alignments.bam>
+The input is the HiFi reads of a tumor and of its matched normal (FASTQ, FASTA or unaligned BAM converted to FASTQ) and a reference genome.
+Besides `vespa`, the steps below use [hifiasm v1.0.0-somatic](https://github.com/ldenti/hifiasm/tree/v1.0.0-somatic), [minimap2](https://github.com/lh3/minimap2), [samtools](https://github.com/samtools/samtools), [bcftools](https://github.com/samtools/bcftools), Python 3 with [pysam](https://github.com/pysam-developers/pysam) for the helpers in `scripts/`, and, for haplotagging, [DeepVariant](https://github.com/google/deepvariant) and [whatshap](https://github.com/whatshap/whatshap).
 
-Arguments:
-     -w                 output directory (default: .)
-     -i                 use this FMD index/store it here (default: build FMD index and store to <reference.fa.fmd>)
-     -q                 mapping quality (default: 20)
-     -p                 accuracy percentile (default: 0.98)
-     -s                 minimum support for calling (default: 2)
-     -l                 minimum length for SV (default: 50)
-     -t                 do not consider haplotagging information (default: consider it)
-     -@                 number of threads (default: 4)
-     -x                 path to SVDSS binary (default: SVDSS)
-     -k                 path to kanpig binary (default: kanpig)
-     -v                 print version
-     -h                 print this help and exit
+In the guide below the reference is `ref.fa` (the chromosomes to call on) and the reads are `tumor.fq.gz` and `normal.fq.gz`.
 
-Positional arguments:
-     <reference.fa>     reference file in FASTA format
-     <alignments.bam>   alignments in BAM format
-```
-
-## Detailed Usage Guide
-SVDSS requires as input the BAM file of the sample to be genotyped and a reference genome in FASTA format (please use an appropriate reference genome, i.e., if you are not interested in ALT contigs, filter them out or use a reference genome that does not include them). To genotype a sample we need to perform the following steps:
-
-1. Build FMD index of reference genome (`SVDSS index`)
-2. Smooth the input BAM file (`SVDSS smooth`)
-3. Extract SFS from smoothed BAM file (`SVDSS search`)
-4. Call SVs from the assembled superstrings (`SVDSS call`)
-5. Genotype SVs using [kanpig](https://github.com/ACEnglish/kanpig)
-
-In the guide below we assume we are using the reference genome file `GRCh38.fa` and the input BAM file `sample.bam`.
-
-Note that you can reuse the index from step 1 for any number of samples genotyped against the same reference genome.
-
-We will now explain each step in more detail.
-
-### Index reference genome
-
-Build the FMD index of the reference genome using 16 threads:
-
-```
-SVDSS index -t16 -d GRCh38.fa > GRCh38.fa.fmd
-```
-The `index` subcommand is a wrapper around `robebwt3 build` (it exposes the same interface).
-
-
-### Smoothing the target sample
-
-Smoothing removes nearly all SNPs, small indels, and sequencing errors from reads. This results in smaller number of SFS being extracted and increases the relevance of extracted SFS to SV discovery significantly. To smooth the sample run:
-
-```
-SVDSS smooth --reference GRCh38.fa --bam sample.bam --threads 16 > smoothed.bam
-samtools index smoothed.bam
-```
-
-This writes to stdout the smoothed bam. This file is sorted in the same order as the input file, however it needs to be indexed again with `samtools index`.
-
-### Extract SFS from target sample
-
-To extract SFS run:
-
-```
-SVDSS search --index GRCh38.fa.fmd --bam smoothed.bam > specifics.txt
-```
-
-This writes to stdout the list of specific strings. The output includes the coordinates of SFS relative to the reads they were extracted from.
-
-
-### Call SVs
-
-We are now ready to call SVs. Run (note that the input `.bam` must be the same used in the search step and must be indexed using `samtools`):
-
-```
-SVDSS call --reference GRCh38.fasta --bam smoothed.bam --sfs specifics.txt --threads 16 > calls.vcf
-```
-
-You can filter the reported SVs by passing the `--min-sv-length` and `--min-cluster-weight` options. These options control the minimum length and minimum number of supporting superstrings for the reported SVs. Higher values for `--min-cluster-weight` will increase precision at the cost of reducing recall. For a diploid 30x coverage sample, `--min-cluster-weight 2` produced the best results in our experiments. For a 30x sample, instead, you can try to increase this to 3 or 4.
-
-This commands output the calls to stdout. Additionally, you can output the alignments of POA contigs against the reference genome (these POA consensus are used to call SVs) using the `--poa` option.
-
-##### Example
-
-**Note:** to run this example, `samtools` and `bcftools` **must be in your path**. Running `SVDSS` on the example data, once downloaded, should take less than 5 minutes.
+### 1. Error correction
 
 ```bash
-cd [svdss-local-repo]
+hifiasm -t16 --write-ec --het-cov <N> --bin-only -o tumor tumor.fq.gz    # tumor.ec.fa
+hifiasm -t16 --write-ec --het-cov <N> -o normal normal.fq.gz             # normal.ec.fa, normal unitigs
+awk '/^S/ {print ">" $2; print $3}' normal.bp.r_utg.gfa > normal.r_utg.fa
+```
+`--het-cov` keeps the somatic variants supported by few reads from being corrected; for the tumor it can instead be computed from a negative-binomial model (`--tumor-purity`, `--clonality`, `--dispersion`, `--somatic-fnr`).
+The options are described in the [README of the fork](https://github.com/ldenti/hifiasm/tree/het_cov#somatic-error-correction).
 
-# Download example data from zenodo
-wget https://zenodo.org/record/6563662/files/svdss-data.tar.gz
-mkdir -p input
-tar xvfz svdss-data.tar.gz -C input
-# Download SVDSS binary
-wget https://github.com/Parsoa/SVDSS/releases/download/v2.1.0/SVDSS_linux_x86-64
-chmod +x SVDSS_linux_x86-64
+### 2. Alignment and haplotagging
 
-# Run the full pipeline (assuming kanpig is in your path, otherwise SVs won't be genotyped)
-./run_svdss -x SVDSS_linux_x86-64 -w svdss2-output input/22.fa input/22.bam
+```bash
+for s in tumor normal; do
+  minimap2 -ax map-hifi -t16 ref.fa $s.ec.fa | samtools sort -o $s.ec.bam - && samtools index $s.ec.bam
+done
+```
+Haplotagging is optional; with it, VESPA keeps the SFS of the two haplotypes apart and the germline filters use the haplotype of each normal read.
+Small variants of the normal are called with DeepVariant on the raw normal alignments and phased with `whatshap phase`; `whatshap haplotag --output-haplotag-list` assigns the raw reads of each sample to a haplotype, and the corrected reads, which keep the name of their raw read, are tagged from that list:
+```bash
+python scripts/tag_bam_from_list.py tumor.ec.bam tumor.haplotags.tsv tumor.ec.hp.bam --with-ps && samtools index tumor.ec.hp.bam
 ```
 
-### Authors
+### 3. Index and SFS
 
-SVDSS is developed by Luca Denti, Parsoa Khorsand, and Thomas Krannich.
+```bash
+# base index: reference + normal unitigs, homopolymers capped at 2
+vespa index -d -m 4G -t16 -p 0 --hpc --hpc-cap 2 ref.fa normal.r_utg.fa -o base.fmd
+# normal reads that still produce SFS: germline sequence the unitigs miss
+vespa search --index base.fmd --fastx normal.ec.fa --threads 16 --hpc --hpc-cap 2 > normal.sfs
+python scripts/extract_missing_reads.py normal.sfs normal.ec.fa missing.fa.gz
+# full index: base index + those reads
+vespa index -d -m 4G -t16 -p 0 --hpc --hpc-cap 2 -i base.fmd missing.fa.gz -o full.fmd
+# SFS of the tumor reads, deduplicated, without SFS longer than 500 bp
+vespa search --index full.fmd --fastx tumor.ec.fa --threads 16 --hpc --hpc-cap 2 > tumor.sfs
+python scripts/dedup_sfs.py tumor.sfs tumor.dedup.sfs --max-length 500
+```
+The `index` subcommand is a wrapper around `ropebwt3 build` (it exposes the same interface), with `--hpc` and `--hpc-cap` added.
+`index` and `search` must use the same `--hpc-cap`.
 
-For inquiries on this software please open an [issue](https://github.com/Parsoa/SVDSS/issues).
+### 4. Calling
 
-### Citation
+```bash
+vespa call --reference ref.fa --bam tumor.ec.hp.bam --sfs tumor.dedup.sfs --normal-contigs-bam normal.ec.hp.bam \
+  --bed-exclusion excluded.bed --clipped --no-clipped-fallback \
+  --min-cluster-weight 5 --min-sv-length 50 --min-mapq 60 --threads 16 > calls.unsorted.vcf
+bcftools sort calls.unsorted.vcf -o calls.vcf
+```
+`--normal-contigs-bam` is the alignment of the corrected normal reads.
+`--bed-exclusion` drops calls in the given regions (e.g., centromeres and telomeres).
+`--min-cluster-weight` is the minimum number of tumor reads supporting a call: higher values increase precision at the cost of recall; we use 5 by default.
 
-SVDSS is published in [Nature Methods](https://doi.org/10.1038/s41592-022-01674-1).
+Calls that the normal reads show as germline are removed.
+The other germline filters flag a call in the `FILTER` field instead of removing it: `GERMLINE`, `LOWPOWER` (too few normal reads to rule out a germline event), `POLYNORMAL` (the locus is length-polymorphic in the normal) and `REPEATDEPTH` (the normal depth is far above the median: a mismapping sink).
+Somatic calls are those with `FILTER=PASS`.
 
-##### Experiments
-Instructions on how to reproduce the experiments described in the manuscript can be found [here](https://github.com/ldenti/SVDSS-experiments) (also provided as submodule of this repository).
+## Reproducing the paper
+
+The scripts that produce the callsets and the evaluations of the paper, with the download of their inputs, are in [VESPA-experiments](https://github.com/dcmonti/VESPA-experiments).
+They use the release v1.0.1.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
