@@ -16,10 +16,10 @@ if(DEFINED CONDAPREFIX)
   message(STATUS "Using conda: ${CONDA_INCLUDE}")
 endif()
 
-project(SVDSS VERSION 2.0.0)
-add_executable(SVDSS assembler.cpp bam.cpp caller.cpp chromosomes.cpp clipper.cpp clusterer.cpp config.cpp indexer.cpp ping_pong.cpp sfs.cpp smoother.cpp sv.cpp bed_filter.cpp main.cpp)
-set_target_properties(SVDSS PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}")
-target_compile_options(SVDSS PRIVATE -Wall -Wextra)
+project(VESPA VERSION 1.0.1)
+add_executable(vespa assembler.cpp bam.cpp caller.cpp chromosomes.cpp clipper.cpp clusterer.cpp config.cpp indexer.cpp ping_pong.cpp sfs.cpp smoother.cpp sv.cpp bed_filter.cpp main.cpp)
+set_target_properties(vespa PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}")
+target_compile_options(vespa PRIVATE -Wall -Wextra)
 
 ##########################
 ### setup dependencies ###
@@ -183,13 +183,13 @@ FetchContent_MakeAvailable(spdlog)
 ### final setup (includes and libraries) ###
 ############################################
 
-add_dependencies(SVDSS abpoa rapidfuzz intervaltree ropebwt spdlog ksw2)
+add_dependencies(vespa abpoa rapidfuzz intervaltree ropebwt spdlog ksw2)
 if(NOT DEFINED CONDAPREFIX)
   # we need to build them
-  add_dependencies(SVDSS deflate htslib)
+  add_dependencies(vespa deflate htslib)
 endif()
 
-target_include_directories(SVDSS
+target_include_directories(vespa
   PRIVATE ${HTS_INCLUDE_DIR}
   PRIVATE ${ABPOA_INCLUDE_DIR}
   PRIVATE ${KSW2_INCLUDE_DIR}
@@ -200,25 +200,25 @@ target_include_directories(SVDSS
   PRIVATE ${PROJECT_SOURCE_DIR}
 )
 
-target_link_options(SVDSS PRIVATE -static-libgcc)
+target_link_options(vespa PRIVATE -static-libgcc)
 
 if(DEFINED CONDAPREFIX)
   # link to conda
   find_library(HTSLIB libhts.so REQUIRED)
   find_library(DEFLATE libdeflate.so REQUIRED)
-  target_link_libraries(SVDSS
+  target_link_libraries(vespa
     PUBLIC hts
     PUBLIC deflate
   )
 else()
   # link to local
-  target_link_libraries(SVDSS
+  target_link_libraries(vespa
     PUBLIC HTSLIB
     PUBLIC DEFLATE
   )
 endif()
 
-target_link_libraries(SVDSS
+target_link_libraries(vespa
   PUBLIC rapidfuzz::rapidfuzz
   PUBLIC ${BINARY_DIR}/lib/libabpoa.a
   PUBLIC ${KSW2_INCLUDE_DIR}/ksw2_extz2_sse.o
@@ -230,7 +230,7 @@ target_link_libraries(SVDSS
 
 if (NOT HOLYBUILD)
   # link to system
-  target_link_libraries(SVDSS
+  target_link_libraries(vespa
     PUBLIC lzma
     PUBLIC bz2
     PUBLIC Threads::Threads
@@ -238,7 +238,7 @@ if (NOT HOLYBUILD)
   )
 else ()
   # link to local. no openmp since we manually added -fopenmp
-  target_link_libraries(SVDSS
+  target_link_libraries(vespa
     PUBLIC ${LLZMA}
     PUBLIC ${LBZ2}
   )

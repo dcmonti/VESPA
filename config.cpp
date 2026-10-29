@@ -25,7 +25,7 @@ void Configuration::print_help(const string &mode) const {
 
 Configuration::Configuration()
     : parser(
-          "SVDSS, Structural Variant Discovery from Sample-specific Strings") {
+          "VESPA, Variant Extraction from somatic-SPecific-strings and draft Assemblies") {
   // clang-format off
   parser.add_options()
     ("bam", "", cxxopts::value<std::string>())

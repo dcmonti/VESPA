@@ -119,7 +119,7 @@ int run_index(int argc, char **argv) {
         string dir(tmpdir);
         while (dir.size() > 1 && dir.back() == '/')
           dir.pop_back();
-        string tmpl_s = dir + "/svdss_hpc_XXXXXX.fa";
+        string tmpl_s = dir + "/vespa_hpc_XXXXXX.fa";
         vector<char> tmpl(tmpl_s.begin(), tmpl_s.end());
         tmpl.push_back('\0');
         int fd = mkstemps(tmpl.data(), 3);

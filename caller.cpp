@@ -1778,7 +1778,7 @@ bool Caller::normal_read_concordant(bam1_t *aln, const string &chrom,
 // Read-based germline filter. An SV (INS/DEL) is called germline when at least
 // config.germline_min_reads normal reads carry a concordant indel near the
 // breakpoint: same type and length ratio >= config.germline_min_ro. Only reads
-// with MAPQ >= config.min_mapq (the SVDSS-call threshold) are considered, and at
+// with MAPQ >= config.min_mapq (the call threshold) are considered, and at
 // most config.germline_max_reads reads are examined per SV to bound cost in
 // high-depth/repeat loci (early-exit once enough support is found). The normal
 // BAM (config.normal_contigs_bam) may be a normal *reads* BAM; unlike the old
@@ -1820,7 +1820,7 @@ bool Caller::is_germline(const SV &sv, const string &chrom, int cl_s, int cl_e,
     if (aln->core.flag & (BAM_FSECONDARY | BAM_FSUPPLEMENTARY | BAM_FUNMAP))
       continue;
     if ((int)aln->core.qual < (int)config->min_mapq)
-      continue; // only reads with at least the SVDSS-call min mapq
+      continue; // only reads with at least the call min mapq
     if (++examined > config->germline_max_reads)
       break; // cap: bound cost in high-depth/repeat loci
     // read must span the breakpoint to carry the event
@@ -2887,6 +2887,7 @@ void Caller::filter_sv_chains() {
 
 void Caller::print_vcf_header() {
   cout << "##fileformat=VCFv4.2" << endl;
+  cout << "##source=VESPA " << VESPA_VERSION << endl;
   cout << "##reference=ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/"
           "data_collections/HGSVC2/technical/reference/"
           "20200513_hg38_NoALT/"

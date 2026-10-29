@@ -13,8 +13,6 @@
 
 using namespace std;
 
-const string version = "v1.0.0-somatic (based on SVDSS v2.1.0)";
-
 int main(int argc, char **argv) {
   time_t t;
   time(&t);
@@ -40,7 +38,7 @@ int main(int argc, char **argv) {
       spdlog::set_level(spdlog::level::debug);
 
     if (c->version) {
-      cout << "SVDSS, " << version << endl;
+      cout << "VESPA " << VESPA_VERSION << endl;
       exit(EXIT_SUCCESS);
     }
 

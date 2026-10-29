@@ -37,7 +37,7 @@ SFSData parse_sfsfile(const string &sfs_path) {
   }
   if (result.source == SFSSource::UNKNOWN)
     spdlog::warn("SFS file {} has no #source header. Assuming FASTA (legacy behavior). "
-                 "Regenerate with latest SVDSS search to add the header.", sfs_path);
+                 "Regenerate with latest vespa search to add the header.", sfs_path);
   spdlog::info("Loaded {} SFSs from {} reads (source: {}).", total, SFSs.size(),
                result.source == SFSSource::BAM ? "bam" :
                result.source == SFSSource::FASTA ? "fasta" : "unknown (assuming fasta)");

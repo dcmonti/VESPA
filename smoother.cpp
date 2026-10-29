@@ -222,7 +222,7 @@ void Smoother::smooth_read(bam1_t *alignment, char *read_seq, int _i, int _j,
       // "/" << strlen((char*)new_qual) << " " << n << endl;
       spdlog::warn(
           "This shouldn't happen anymore. If you see this warning, please "
-          "open an issue at https://github.com/Parsoa/SVDSS/issues");
+          "open an issue at https://github.com/dcmonti/VESPA/issues");
       bam_aux_update_int(alignment, "XF", 3);
       return;
     }

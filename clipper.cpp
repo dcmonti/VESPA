@@ -663,7 +663,7 @@ void Clipper::store_clip_clusters(const vector<Clip> &lclips,
     return;
   ofstream f;
   f.open(config->clip_clusters);
-  f << "#SVDSS clip clusters\n";
+  f << "#VESPA clip clusters\n";
   f << "#fields=chrom:p_1based\tside\tw\tl_max\tn_reads\tn_sa_reads"
        "\tstrands\tsa_chrom:sa_pos_1based\tsa_ref_len\tsa_query_start"
        "\tsa_query_len\tdiff\tdR\tdQ\tbranch\tpred_len\treads\tsa_reads\n";
@@ -772,7 +772,7 @@ void Clipper::store_vote_groups() {
     return;
   ofstream f;
   f.open(config->clip_clusters + ".votes");
-  f << "#SVDSS SA vote groups per clip cluster\n";
+  f << "#VESPA SA vote groups per clip cluster\n";
   f << "#fields=side\tchrom:cluster_p_1based\tn_groups\tgroup_idx"
        "\tsa_chrom:sa_pos\tsa_ref_len\tsa_query_start\tsa_query_len"
        "\tstrands\tjunction\tcount\tdq_median\tdegenerate\twinner"

@@ -12,19 +12,22 @@ using namespace std;
 
 // clang-format off
 
+// printed by --version and written to the VCF header (##source)
+static const char VESPA_VERSION[] = "v1.0.1 (based on SVDSS v2.1.0)";
+
 static const char MAIN_USAGE_MESSAGE[] =
-  "SVDSS [index|smooth|search|call] --help\n"
+  "vespa [index|smooth|search|call] --help\n"
   "      --help                           print help message\n"
   "      --version                        print version\n";
 
 static const char INDEX_USAGE_MESSAGE[] =
-  "SVDSS index --reference <reference> --index <index>\n"
+  "vespa index --reference <reference> --index <index>\n"
   "      --binary                         store the index in binary format\n"
   "      --append <oldindex>              append to existing index\n"
   "      --help                           print help message\n";
 
 static const char SMOOTH_USAGE_MESSAGE[] =
-  "SVDSS smooth --reference <reference> --bam <bam>\n"
+  "vespa smooth --reference <reference> --bam <bam>\n"
   "      --min-mapq <INT>                 minimum mapping quality (default: 20)\n"
   "      --min-indel-length <INT>         indels shorter than this are smoothed out (default: 20)\n"
   "      --accp <FLOAT>                   accuracy percentile for alignments filtering (default: 0.98)\n"
@@ -33,7 +36,7 @@ static const char SMOOTH_USAGE_MESSAGE[] =
   "      --help                           print help message\n";
 
 static const char SEARCH_USAGE_MESSAGE[] =
-  "SVDSS search --index <index> [--bam <bam>|--fastq <fastq>]\n"
+  "vespa search --index <index> [--bam <bam>|--fastq <fastq>]\n"
   "      --bsize <INT>                    batch size (default: 10000)\n"
   "      --noputative                     when input is smoothed bam, do not filter unsmoothed reads (default: putative)\n"
   "      --noassemble                     do not assemble specific strings overlapping on a read (default: assemble)\n"
@@ -43,7 +46,7 @@ static const char SEARCH_USAGE_MESSAGE[] =
   "      --help                           print help message\n";
 
 static const char CALL_USAGE_MESSAGE[] =
-  "SVDSS call --reference <reference> --bam <bam> --sfs <sfs>\n"
+  "vespa call --reference <reference> --bam <bam> --sfs <sfs>\n"
   "      --poa <FILE>                     store POA in .sam format to this file (default: do not store)\n"
   "      --clusters <FILE>                store clusters to this file (default: do not store)\n"
   "      --clip-clusters <FILE>           store clipped-SFS clusters to this file (requires --clipped; default: do not store)\n"
