@@ -109,8 +109,8 @@ Caller::collect_sa_fragments(samFile *bam, hts_idx_t *idx, bam_hdr_t *hdr,
     return out;
   const int tol = PARTNER_SA_TOL / 5;
   // (contig, bucketed pos, strand relative to the record) -> distinct read
-  // names, and the modal block key -> (nomi read distinti, (lunghezza blocco,
-  // posizione REALE))
+  // names, and the modal block key -> (distinct read names, (block length,
+  // REAL position))
   map<tuple<string, uint, bool>, pair<set<string>, pair<uint, uint>>> groups;
   bam1_t *aln = bam_init1();
   const uint bp[2] = {s, e};
@@ -153,9 +153,9 @@ Caller::collect_sa_fragments(samFile *bam, hts_idx_t *idx, bam_hdr_t *hdr,
           break;
         if (rname != chrom && pos > 0) {
           const uint span = sa_cigar_ref_span(c3 + 1, c4);
-          // Il bucket serve SOLO a raggruppare: la posizione riportata deve
-          // essere quella reale, altrimenti il mate esce spostato di meta'
-          // bucket e la geometria emessa non e' quella dei read.
+          // The bucket is ONLY for grouping: the reported position must be
+          // the real one, otherwise the mate comes out shifted by half a
+          // bucket and the emitted geometry is not the one in the reads.
           //
           // Strand RELATIVE to this record, not the SA's absolute one: the same
           // fragment carried by reads of both orientations reports opposite SA
