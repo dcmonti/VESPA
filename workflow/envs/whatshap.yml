@@ -1,0 +1,6 @@
+name: vespa-whatshap
+channels: [conda-forge, bioconda]
+dependencies:
+  - whatshap=2.8
+  - bcftools=1.23.1
+  - htslib=1.23.1

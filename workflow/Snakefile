@@ -1,0 +1,33 @@
+# ============================================================
+# VESPA: somatic SV calling from a PacBio HiFi tumor/normal pair
+#
+#   input T/N (aligned BAM | unaligned BAM | FASTQ | FASTA)
+#     -> [raw alignment, only to split by chromosome]
+#     -> hifiasm error correction (per chromosome or whole genome)
+#     -> minimap2 of the raw and of the EC reads
+#     -> [haplotagging: DeepVariant + whatshap on the raw reads, or a phased VCF]
+#     -> FMD index: reference + normal unitigs + normal reads the unitigs miss
+#     -> vespa search (tumor) -> dedup -> vespa call
+#     -> call/calls.vcf, call/calls.PASS.vcf
+#
+# Run:  snakemake --configfile config.yaml --cores 64 [--sdm conda]
+# See config/config.example.yaml for every option.
+# ============================================================
+
+include: "rules/common.smk"
+include: "rules/tools.smk"
+include: "rules/reference.smk"
+include: "rules/inputs.smk"
+include: "rules/ec.smk"
+include: "rules/align.smk"
+include: "rules/haplotag.smk"
+include: "rules/index.smk"
+include: "rules/search.smk"
+include: "rules/call.smk"
+
+
+rule all:
+    input:
+        CALLS_VCF,
+        CALLS_PASS,
+    default_target: True

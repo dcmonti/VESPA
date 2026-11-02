@@ -1,0 +1,16 @@
+# Pinned versions of VESPA and of the hifiasm fork the workflow runs.
+# `tools.mode: release` downloads `asset` from the GitHub release of `tag` and
+# checks `sha256`; `tools.mode: build` compiles `tag` from `repo`. In every mode
+# `--version` must report `tag`.
+
+vespa:
+  repo: https://github.com/dcmonti/VESPA
+  tag: v1.0.1
+  asset: vespa_linux_x86-64
+  sha256: 3e424390b17314b8cc5173784c4263e52463cc7e3add4b1897058697afef0f6f
+
+hifiasm:
+  repo: https://github.com/ldenti/hifiasm
+  tag: v1.0.0-somatic
+  asset: hifiasm_linux_x86-64
+  sha256: ad32741d2f49dbd72af588d457158643e24f80ab1c14aaab979183f7648399d2

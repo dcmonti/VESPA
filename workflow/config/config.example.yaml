@@ -1,0 +1,132 @@
+# ============================================================
+# VESPA workflow -- example configuration
+#
+# Copy this file, set the paths in the first block, and run:
+#   snakemake -s workflow/Snakefile --configfile my_config.yaml --cores 64
+#
+# Only the first block is mandatory; every other key shows its default.
+# ============================================================
+
+# ---- Mandatory ----------------------------------------------------------
+
+# One file per sample, from the same individual. Accepted: aligned BAM,
+# unaligned BAM (e.g. PacBio HiFi reads), FASTQ or FASTA, gzipped or not.
+# CRAM is not supported.
+tumor:  "/path/to/tumor.bam"
+normal: "/path/to/normal.bam"
+
+# Reference FASTA (plain or bgzip). The index is built from all its contigs; reads
+# are aligned and SVs are called on its `chromosomes`. An aligned input BAM does
+# NOT need to be aligned to this reference: it is only used to bin reads by
+# chromosome.
+reference: "/path/to/ref.fa"
+
+outdir: "results"
+
+# ---- vespa and hifiasm binaries --------------------------------------------
+# The workflow runs the versions pinned in workflow/tools.yaml.
+tools:
+  # release: download the static x86-64 binaries of the pinned release (default)
+  # build:   compile the pinned tags from source
+  # path:    use the binaries below as given
+  mode: release
+  # Where downloaded/built binaries are cached and shared across runs
+  # (default ~/.cache/vespa).
+  dir: ""
+  vespa_bin: ""       # mode: path
+  hifiasm_bin: ""     # mode: path
+  # `--version` must report the pinned tag; set to true to only warn
+  # (e.g. for a development build).
+  allow_version_mismatch: false
+
+# ---- Reference and chromosomes ------------------------------------------
+
+# Chromosomes to error-correct and call on. Empty = primary chromosomes found in
+# reference.fai (names matching (chr)1..22, X, Y; alt, random, Un, M, EBV and
+# decoys are left out). For a female sample, drop chrY.
+chromosomes: []
+
+# BED of regions excluded from calling (e.g. centromeres and telomeres).
+# Strongly recommended.
+exclusion_bed: ""
+
+# ---- Error correction (hifiasm fork) --------------------------------------
+# Options: https://github.com/ldenti/hifiasm/tree/het_cov#somatic-error-correction
+error_correction:
+  # Correct one chromosome at a time. Below ~55x real depth, whole-genome
+  # correction introduces errors instead of removing them. Needs the raw reads
+  # aligned (an aligned BAM input is used as is; otherwise the workflow aligns
+  # them). Unmapped reads and reads whose primary alignment is outside
+  # `chromosomes` are dropped.
+  split_by_chr: true
+  # --het-cov of the normal.
+  normal_het_cov: 4
+  # Tumor threshold: --het-cov, used when tumor_purity is 0 ...
+  tumor_het_cov: 6
+  # ... or, with tumor_purity > 0, the negative-binomial model of the fork:
+  # purity, fraction of the tumor cells that carry the variants to keep,
+  # over-dispersion of the depth and largest fraction of somatic variants
+  # exposed to correction.
+  tumor_purity: 0
+  tumor_clonality: 1.0
+  tumor_dispersion: 0.02
+  tumor_somatic_fnr: 0.10
+  # Extra flags appended to every hifiasm run.
+  extra: ""
+
+# ---- Haplotagging ---------------------------------------------------------
+haplotag:
+  # deepvariant: DeepVariant + whatshap phase on the raw normal reads, run from a
+  #              container (default)
+  # vcf:         a phased VCF of the normal, given below
+  # none:        no haplotagging
+  mode: deepvariant
+  # mode vcf: phased VCF on the coordinates of `reference`.
+  phased_vcf: ""
+  container_runtime: singularity   # singularity | apptainer | docker
+  deepvariant_image: "docker://google/deepvariant:1.9.0"
+  # Fail if whatshap tags fewer reads than this (contig-name mismatches make it
+  # tag almost nothing, silently).
+  min_tagged_fraction: 0.2
+
+# ---- FMD index ------------------------------------------------------------
+index:
+  # Homopolymer-compressed index and search; hpc_cap caps each run at N copies
+  # (1 = full collapse).
+  hpc: true
+  hpc_cap: 2
+  batch_size: "4G"     # ropebwt3 -m
+  sais_threads: 0      # ropebwt3 -p (more threads = more RAM)
+
+# ---- vespa search ---------------------------------------------------------
+search:
+  bsize: 10000
+  # Drop SFS longer than this before calling (0 = no cap).
+  max_sfs_length: 500
+
+# ---- vespa call -----------------------------------------------------------
+call:
+  # Minimum number of tumor reads supporting a call: higher values increase
+  # precision at the cost of recall.
+  min_cluster_weight: 5
+  min_sv_length: 50
+  min_mapq: 60
+  # Also call from clipped alignments with SA tags (needed for INV, BND and
+  # large DUP); paired-clip calls without SA are always disabled.
+  clipped: true
+  # Ignore HP tags in the per-haplotype split before POA (the germline filters
+  # still read HP when present).
+  noht: false
+  # Also write call/calls.clusters and call/calls.clipped_clusters.
+  save_clusters: false
+  # Extra flags appended to vespa call.
+  extra: ""
+
+# ---- Threads per job --------------------------------------------------------
+threads:
+  default: 8
+  hifiasm: 32
+  minimap2: 32
+  deepvariant: 16
+  whatshap: 4
+  vespa: 32

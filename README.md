@@ -63,6 +63,25 @@ make
 This creates the `vespa` binary in the root of the repo.
 `static/build-static.sh` builds the static binary instead.
 
+## Workflow
+
+The Snakemake workflow in `workflow/` runs every step of the [usage guide](#usage-guide), from the reads to the calls, with the settings of the paper.
+It needs:
+* [Snakemake](https://snakemake.readthedocs.io) 8 or newer;
+* the tools of `workflow/envs/environment.yml` in the path (`conda env create -f workflow/envs/environment.yml`), or `--sdm conda` to let Snakemake create one environment per step (samtools must be in the path in any case: the workflow inspects the inputs with it before running);
+* Singularity, Apptainer or Docker, to run DeepVariant for haplotagging (`haplotag.mode: deepvariant`, the default).
+
+`vespa` and hifiasm are downloaded from their releases, at the versions pinned in `workflow/tools.yaml`, and checked against their sha256 (`tools.mode: build` compiles them instead).
+
+```bash
+git clone https://github.com/dcmonti/VESPA.git
+cp VESPA/workflow/config/config.example.yaml config.yaml    # set tumor, normal, reference, exclusion_bed
+snakemake -s VESPA/workflow/Snakefile --configfile config.yaml --cores 64
+```
+Tumor and normal can each be an aligned or unaligned BAM, a FASTQ or a FASTA file.
+The calls are in `results/call/calls.vcf`, the somatic ones (`FILTER=PASS`) in `results/call/calls.PASS.vcf`.
+`workflow/config/config.example.yaml` describes every option.
+
 ## Usage Guide
 
 The input is the HiFi reads of a tumor and of its matched normal (FASTQ, FASTA or unaligned BAM converted to FASTQ) and a reference genome.
