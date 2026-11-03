@@ -1,0 +1,36 @@
+# ============================================================
+# VESPA workflow -- demo
+#
+# Two 100 kb windows of chromosome 20 of HG008 (GIAB, PacBio Revio), as two contigs,
+# each holding one somatic SV of the GIAB HG008-T V0.5 draft benchmark:
+#   demo_del  chr20:51,746,001-51,846,000  DEL of 1368 bp at 50,494
+#   demo_inv  chr20:38,379,001-38,479,000  INV of 1359 bp at 49,242
+# Run from the root of the repository:
+#   snakemake -s workflow/Snakefile --configfile workflow/demo/config.yaml --cores 8
+# The somatic calls in demo_results/call/calls.PASS.vcf are those of
+# workflow/demo/expected.vcf. make_demo.sh documents how the data were extracted.
+# ============================================================
+
+tumor: workflow/demo/tumor.fq.gz
+normal: workflow/demo/normal.fq.gz
+reference: workflow/demo/ref.fa
+chromosomes: [demo_del, demo_inv]
+outdir: demo_results
+
+error_correction:
+  # whole-genome correction: the windows are too small to split
+  split_by_chr: false
+
+haplotag:
+  # phased VCF of the normal (DeepVariant + whatshap phase), so that the demo needs
+  # no container
+  mode: vcf
+  phased_vcf: workflow/demo/normal.phased.vcf.gz
+
+threads:
+  default: 4
+  hifiasm: 8
+  minimap2: 8
+  deepvariant: 8
+  whatshap: 4
+  vespa: 8

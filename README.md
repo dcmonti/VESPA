@@ -82,6 +82,14 @@ Tumor and normal can each be an aligned or unaligned BAM, a FASTQ or a FASTA fil
 The calls are in `results/call/calls.vcf`, the somatic ones (`FILTER=PASS`) in `results/call/calls.PASS.vcf`.
 `workflow/config/config.example.yaml` describes every option.
 
+`workflow/demo/` holds a demo to test the installation: two 100 kb windows of chromosome 20 of HG008 (GIAB), each with one somatic SV of the GIAB draft benchmark.
+It runs in about two minutes on 8 cores, plus about ten minutes the first time with `--sdm conda`, to create the environments:
+```bash
+cd VESPA
+snakemake -s workflow/Snakefile --configfile workflow/demo/config.yaml --cores 8
+```
+The calls in `demo_results/call/calls.PASS.vcf` are those of `workflow/demo/expected.vcf`.
+
 ## Usage Guide
 
 The input is the HiFi reads of a tumor and of its matched normal (FASTQ, FASTA or unaligned BAM converted to FASTQ) and a reference genome.

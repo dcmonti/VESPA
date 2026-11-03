@@ -256,9 +256,10 @@ for s in SAMPLES:
     if SPLIT and KIND[s] == "bam_aligned":
         _missing = [c for c in CHROMS if c not in set(bam_contigs(INPUT[s]))]
         if _missing:
+            _more = " ..." if len(_missing) > 5 else ""
             _die(
                 f"{s} BAM '{INPUT[s]}' has no {', '.join(_missing[:5])}"
-                f"{' ...' if len(_missing) > 5 else ''}: chromosome names must match "
+                f"{_more}: chromosome names must match "
                 "'chromosomes' (e.g. chr1 vs 1). The BAM does not need to be aligned to "
                 "'reference', it is only used to bin reads by chromosome."
             )

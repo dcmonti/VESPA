@@ -64,3 +64,7 @@ experiments/simulation/
 .snakemake
 
 example
+.snakemake/
+demo_results/
+!workflow/demo/ref.fa
+!workflow/demo/ref.fa.fai
