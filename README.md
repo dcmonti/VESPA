@@ -4,14 +4,12 @@
 
 # VESPA: Variant Extraction from somatic-SPecific strings and draft Assemblies
 
-#### Note: VESPA needs a tumor and its matched normal, both sequenced with PacBio HiFi. It has not been tested on other technologies (e.g., ONT).
-
 ---
 
 VESPA finds the sequence of the tumor reads that is absent from the reference and from the germline genome of the patient, and calls somatic SVs from it.
 It is based on the notion of sample-specific strings (SFS, or simply _specific strings_): the shortest substrings of a read that do not occur in an index.
 Here the index holds the reference and the germline sequence of the patient: a draft assembly of the normal reads (unitigs) and the normal reads the assembly misses.
-The SFS of the tumor reads against this index are then specific to the tumor, and they mark candidate somatic SVs.
+The SFS of the tumor reads against this index are then specific to the tumor sample, and they mark candidate somatic SVs.
 
 The steps are:
 1. error correction of the tumor and normal reads with a version of hifiasm that preserves somatic variants ([hifiasm v1.0.0-somatic](https://github.com/ldenti/hifiasm/tree/v1.0.0-somatic));
@@ -82,7 +80,7 @@ git clone https://github.com/dcmonti/VESPA.git
 cp VESPA/workflow/config/config.example.yaml config.yaml    # set tumor, normal, reference, exclusion_bed
 snakemake -s VESPA/workflow/Snakefile --configfile config.yaml --cores 64
 ```
-Tumor and normal can each be an aligned or unaligned BAM, a FASTQ or a FASTA file.
+The tumor and normal samples can each be an aligned or unaligned BAM, a FASTQ or a FASTA file.
 The calls are in `results/call/calls.vcf`, the somatic ones (`FILTER=PASS`) in `results/call/calls.PASS.vcf`.
 `workflow/config/config.example.yaml` describes every option.
 
@@ -96,7 +94,7 @@ The calls in `demo_results/call/calls.PASS.vcf` are those of `workflow/demo/expe
 
 ## Usage Guide
 
-The input is the HiFi reads of a tumor and of its matched normal (FASTQ, FASTA or unaligned BAM converted to FASTQ) and a reference genome.
+The input is the HiFi reads of a tumor sample and of its matched normal sample (FASTQ, FASTA or unaligned BAM converted to FASTQ) and a reference genome.
 Besides `vespa`, the steps below use [hifiasm v1.0.0-somatic](https://github.com/ldenti/hifiasm/tree/v1.0.0-somatic), [minimap2](https://github.com/lh3/minimap2), [samtools](https://github.com/samtools/samtools), [bcftools](https://github.com/samtools/bcftools), Python 3 with [pysam](https://github.com/pysam-developers/pysam) for the helpers in `scripts/`, and, for haplotagging, [DeepVariant](https://github.com/google/deepvariant) and [whatshap](https://github.com/whatshap/whatshap).
 
 In the guide below the reference is `ref.fa` (the chromosomes to call on) and the reads are `tumor.fq.gz` and `normal.fq.gz`.
@@ -108,7 +106,7 @@ hifiasm -t16 --write-ec --het-cov <N> --bin-only -o tumor tumor.fq.gz    # tumor
 hifiasm -t16 --write-ec --het-cov <N> -o normal normal.fq.gz             # normal.ec.fa, normal unitigs
 awk '/^S/ {print ">" $2; print $3}' normal.bp.r_utg.gfa > normal.r_utg.fa
 ```
-`--het-cov` keeps the somatic variants supported by few reads from being corrected; for the tumor it can instead be computed from a negative-binomial model (`--tumor-purity`, `--clonality`, `--dispersion`, `--somatic-fnr`).
+`--het-cov` keeps the somatic variants supported by few reads from being corrected; for the tumor sample it can instead be computed from a negative-binomial model (`--tumor-purity`, `--clonality`, `--dispersion`, `--somatic-fnr`).
 The options are described in the [README of the fork](https://github.com/ldenti/hifiasm/tree/het_cov#somatic-error-correction).
 
 ### 2. Alignment and haplotagging
@@ -154,7 +152,7 @@ bcftools sort calls.unsorted.vcf -o calls.vcf
 `--min-cluster-weight` is the minimum number of tumor reads supporting a call: higher values increase precision at the cost of recall; we use 5 by default.
 
 Calls that the normal reads show as germline are removed.
-The other germline filters flag a call in the `FILTER` field instead of removing it: `GERMLINE`, `LOWPOWER` (too few normal reads to rule out a germline event), `POLYNORMAL` (the locus is length-polymorphic in the normal) and `REPEATDEPTH` (the normal depth is far above the median: a mismapping sink).
+The other germline filters flag a call in the `FILTER` field instead of removing it: `GERMLINE`, `LOWPOWER` (too few normal reads to rule out a germline event), `POLYNORMAL` (the locus is length-polymorphic in the normal sample) and `REPEATDEPTH` (the normal depth is far above the median: a mismapping sink).
 Somatic calls are those with `FILTER=PASS`.
 
 ## Reproducing the paper
