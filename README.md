@@ -4,8 +4,6 @@
 
 # VESPA: Variant Extraction from somatic-SPecific strings and draft Assemblies
 
----
-
 VESPA finds the sequence of the tumor reads that is absent from the reference and from the germline genome of the patient, and calls somatic SVs from it.
 It is based on the notion of sample-specific strings (SFS, or simply _specific strings_): the shortest substrings of a read that do not occur in an index.
 Here the index holds the reference and the germline sequence of the patient: a draft assembly of the normal reads (unitigs) and the normal reads the assembly misses.
