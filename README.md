@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="img/vespa-logo.svg" alt="VESPA" width="220">
+</p>
+
 # VESPA: Variant Extraction from somatic-SPecific strings and draft Assemblies
 
 #### Note: VESPA needs a tumor and its matched normal, both sequenced with PacBio HiFi. It has not been tested on other technologies (e.g., ONT).
